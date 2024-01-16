@@ -1,69 +1,107 @@
 use anyhow::Result;
+use fedimint_client::ClientArc;
 use fedimint_core::api::InviteCode;
 use fedimint_core::config::FederationId;
+use fedimint_core::db::Database;
+use tokio::sync::Mutex;
+use tracing::warn;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
-use fedimint_client::{derivable_secret::DerivableSecret, ClientArc};
-
-use fedimint_client::{get_config_from_db, FederationInfo};
-use fedimint_core::{db::Database};
-use fedimint_ln_client::LightningClientInit;
-use fedimint_mint_client::MintClientInit;
-use fedimint_wallet_client::WalletClientInit;
+use crate::client::LocalClientBuilder;
+use crate::db::FederationConfig;
 
 
 #[derive(Debug, Clone)]
 pub struct MultiMint {
-    pub mint_map: BTreeMap<FederationId, ClientArc>
+    db: Database,
+    pub client_builder: LocalClientBuilder,
+    pub clients: Arc<Mutex<BTreeMap<FederationId, ClientArc>>>
 }
 
 impl MultiMint {
-    pub fn new() -> Result<Self> {
-        // Load existing fedimint clients
-        // Return self
+    pub async fn new(
+        work_dir: PathBuf,
+    ) -> Result<Self> {
+        let db = Database::new(
+            fedimint_rocksdb::RocksDb::open(work_dir.join("multimint.db"))?,
+            Default::default(),
+        );
+
+        let client_builder = LocalClientBuilder::new(
+            work_dir,
+        );
+
+        let mut clients = Arc::new(Mutex::new(BTreeMap::new()));
+
+        Self::load_clients(&mut clients, &db, &client_builder).await;
+
         Ok(Self {
-            mint_map: BTreeMap::new()
+            db: db,
+            client_builder: client_builder,
+            clients,
         })
     }
 
-    fn load_existing(self) -> Result<Self> {
-        // Load existing fedimint clients
-        // Return self
-        Ok(self)
+    async fn load_clients(
+        clients: &mut Arc<Mutex<BTreeMap<FederationId, ClientArc>>>,
+        db: &Database,
+        client_builder: &LocalClientBuilder,
+    ) {
+        let mut clients = clients.lock().await;
+
+        let dbtx = db.begin_transaction().await;
+        let configs = client_builder.load_configs(dbtx.into_nc()).await;
+
+        for config in configs {
+            let federation_id = config.invite_code.federation_id();
+
+            if let Ok(client) = client_builder
+                .build(config.clone())
+                .await
+            {
+                clients.insert(federation_id, client);
+                
+            } else {
+                warn!("Failed to load client for federation: {federation_id}");
+            }
+        }
     }
 
-    pub fn register(self, invite_code: InviteCode) -> Self {
+    pub async fn register_new(&mut self, invite_code: InviteCode) -> Result<()> {
         // Register new FederationId and ClientArc
         // Add into map
         // Return self
-        self
-    }
+        if self
+                .clients
+                .lock()
+                .await
+                .get(&invite_code.federation_id())
+                .is_some()
+            {
+                return Err(anyhow::anyhow!("Conflit: Federation already registered"));
+            }
 
-    pub async fn load_fedimint_client(
-        mut self,
-        invite_code: InviteCode,
-        fm_db_path: PathBuf,
-        root_secret: DerivableSecret,
-    ) -> Result<Self> {
-        let db = Database::new(
-            fedimint_rocksdb::RocksDb::open(fm_db_path.clone())?,
-            Default::default(),
-        );
-        let mut client_builder = fedimint_client::Client::builder();
-        if get_config_from_db(&db).await.is_none() {
-            let federation_info = FederationInfo::from_invite_code(invite_code).await?;
-            client_builder.with_federation_info(federation_info);
-        };
-        client_builder.with_database(db);
-        client_builder.with_module(WalletClientInit(None));
-        client_builder.with_module(MintClientInit);
-        client_builder.with_module(LightningClientInit);
-        client_builder.with_primary_module(1);
-        let client_res = client_builder.build(root_secret.clone()).await?;
+            let federation_id = invite_code.federation_id();
+            let client_cfg = FederationConfig {
+                invite_code,
+            };
 
-        self.mint_map.insert(client_res.federation_id(), client_res);
+            let client = self
+                .client_builder
+                .build(client_cfg.clone())
+                .await?;
+            // self.check_federation_network(&federation_config, gateway_config.network)
+            //     .await?;
 
-        Ok(self)
+            self.clients.lock().await.insert(federation_id, client);
+
+            let dbtx = self.db.begin_transaction().await;
+            self.client_builder
+                .save_config(client_cfg.clone(), dbtx)
+                .await?;
+
+            Ok(())
     }
 }

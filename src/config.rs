@@ -1,5 +1,3 @@
-use fedimint_client::derivable_secret::DerivableSecret;
-use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_core::api::InviteCode;
 use std::env;
 use std::path::PathBuf;
@@ -12,20 +10,19 @@ lazy_static::lazy_static! {
 }
 
 pub struct Config {
-    pub fm_db_path: PathBuf,
+    pub data_dir: PathBuf,
     pub invite_code: InviteCode,
     pub host: String,
     pub port: u16,
     pub password: String,
-    pub root_secret: DerivableSecret,
 }
 
 impl Config {
     pub fn from_env() -> Result<Self, env::VarError> {
         dotenv::dotenv().ok();
 
-        let fm_db_path = env::var("FM_DB_PATH").expect("FM_DB_PATH must be set");
-        let fm_db_path = PathBuf::from_str(&fm_db_path).expect("Invalid fm db path");
+        let data_dir = env::var("DATA_DIR").expect("DATA_DIR must be set");
+        let data_dir = PathBuf::from_str(&data_dir).expect("Invalid fm db path");
 
         let invite_code = InviteCode::from_str(&env::var("INVITE_CODE").expect("INVITE_CODE must be set")).expect("Invalid invite code");
 
@@ -36,25 +33,14 @@ impl Config {
 
         let password = env::var("PASSWORD").expect("PASSWORD must be set");
 
-        let root_secret = create_root_secret(env::var("SECRET").expect("SECRET must be set"));
-
         info!("Loaded config");
 
         Ok(Self {
-            fm_db_path,
+            data_dir,
             invite_code,
             host,
             port,
             password,
-            root_secret,
         })
     }
-}
-
-pub fn create_root_secret(secret: String) -> DerivableSecret {
-    let secret_bytes = secret.as_bytes();
-    assert_eq!(secret_bytes.len(), 64, "SECRET must be 64 bytes long");
-    let mut secret_array = [0; 64];
-    secret_array.copy_from_slice(secret_bytes);
-    PlainRootSecretStrategy::to_root_secret(&secret_array)
 }
