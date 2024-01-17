@@ -9,6 +9,11 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+pub mod router;
+pub mod config;
+pub mod db;
+pub mod client;
+
 use crate::client::LocalClientBuilder;
 use crate::db::FederationConfig;
 
@@ -70,9 +75,6 @@ impl MultiMint {
     }
 
     pub async fn register_new(&mut self, invite_code: InviteCode) -> Result<()> {
-        // Register new FederationId and ClientArc
-        // Add into map
-        // Return self
         if self
                 .clients
                 .lock()
@@ -80,7 +82,8 @@ impl MultiMint {
                 .get(&invite_code.federation_id())
                 .is_some()
             {
-                return Err(anyhow::anyhow!("Conflit: Federation already registered"));
+                warn!("Federation already registered: {:?}", invite_code.federation_id());
+                return Ok(());
             }
 
             let federation_id = invite_code.federation_id();

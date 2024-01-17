@@ -1,53 +1,12 @@
-use std::str::FromStr;
-
 use axum::{
-    extract::{Query, Request, State},
-    middleware::{from_fn, from_fn_with_state, Next},
-    Router, body::Body, Extension, http::StatusCode, response::Response, routing::get,
+    extract::State,
+    Router,  http::StatusCode, routing::get,
 };
-use config::CONFIG;
-use fedimint_client::ClientArc;
-use fedimint_core::{config::FederationId, api::InviteCode};
+
+use multimint::{config::CONFIG, router::AppState};
 // use tower_http::validate_request::ValidateRequestHeaderLayer;
 use tracing::info;
 use anyhow::Result;
-
-pub mod handlers;
-pub mod config;
-pub mod multimint;
-pub mod db;
-pub mod client;
-pub mod error;
-
-#[derive(Debug, Clone)]
-pub struct AppState {
-    pub multimint: multimint::MultiMint,
-}
-
-// /// Middleware to check that they used a valid federation_id and only pass on the associated clientArc
-// async fn select_federation(
-//     state: AppState,
-//     next: Next,
-// ) -> Result<Response<Body>, StatusCode> {
-//     let body = req.body_mut();
-//     if let Some(client_arc) = state.multimint.clients.get(&query.federation_id) {
-//         req.extensions_mut().insert(client_arc.clone());
-//         Ok(next.run(req).await)
-//     } else {
-//         Err(StatusCode::BAD_REQUEST)
-//     }
-// }
-
-async fn handle_test(
-    State(state): State<AppState>,
-) -> Result<String, StatusCode> {
-    // just return test string
-    for (federation_id, _federation) in state.multimint.clients.lock().await.iter() {
-        info!("federation_id: {:?}", federation_id);
-    }
-
-    Ok("test".to_string())
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -67,9 +26,6 @@ async fn main() -> Result<()> {
     let app = Router::new()
         .route("/", get(handle_test))
         .with_state(state);
-        
-        // .layer(from_fn_with_state(state, select_federation));
-    // .layer(ValidateRequestHeaderLayer::bearer(&CONFIG.password.clone()));
 
     let listener = tokio::net::TcpListener::bind(format!("{}:{}", CONFIG.host, CONFIG.port))
         .await
