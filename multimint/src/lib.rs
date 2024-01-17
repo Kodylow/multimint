@@ -105,4 +105,8 @@ impl MultiMint {
 
             Ok(())
     }
+
+    pub async fn get_client(&self, federation_id: &FederationId) -> Option<ClientArc> {
+        self.clients.lock().await.get(federation_id).cloned()
+    }
 }
