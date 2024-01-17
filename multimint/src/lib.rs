@@ -9,8 +9,6 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-pub mod router;
-pub mod config;
 pub mod db;
 pub mod client;
 

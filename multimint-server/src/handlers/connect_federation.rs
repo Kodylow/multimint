@@ -4,7 +4,7 @@ use serde::{Serialize, Deserialize};
 use anyhow::Result;
 use serde_json::{Value, json};
 
-use crate::router::{error::AppError, AppState};
+use crate::{error::AppError, AppState};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConnectFedPayload {

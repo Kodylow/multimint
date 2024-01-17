@@ -1,12 +1,23 @@
 use axum::{
-    extract::State,
-    Router,  http::StatusCode, routing::get,
+    Router,  routing::post,
 };
 
-use multimint::{config::CONFIG, router::AppState};
 // use tower_http::validate_request::ValidateRequestHeaderLayer;
 use tracing::info;
 use anyhow::Result;
+
+pub mod config;
+pub mod handlers;
+pub mod error;
+
+use config::CONFIG;
+
+use crate::handlers::connect_federation::handle_connect_federation;
+
+#[derive(Debug, Clone)]
+pub struct AppState {
+    pub multimint: multimint::MultiMint,
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -24,7 +35,7 @@ async fn main() -> Result<()> {
 
     let state = AppState { multimint };
     let app = Router::new()
-        .route("/", get(handle_test))
+        .route("/connect_federation", post(handle_connect_federation))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(format!("{}:{}", CONFIG.host, CONFIG.port))

@@ -3,5 +3,5 @@ pub mod error;
 
 #[derive(Debug, Clone)]
 pub struct AppState {
-    pub multimint: crate::MultiMint,
+    pub multimint: multimint::MultiMint,
 }
