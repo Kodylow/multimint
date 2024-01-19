@@ -1,5 +1,5 @@
 use axum::{
-    Router,  routing::post,
+    Router,  routing::{post, get},
 };
 
 // use tower_http::validate_request::ValidateRequestHeaderLayer;
@@ -12,7 +12,7 @@ pub mod error;
 
 use config::CONFIG;
 
-use crate::handlers::swap::handle_swap;
+use crate::handlers::{swap::handle_swap, info::handle_info};
 
 #[derive(Debug, Clone)]
 pub struct AppState {
@@ -28,6 +28,7 @@ async fn main() -> Result<()> {
 
     let state = AppState { multimint };
     let app = Router::new()
+        .route("/info", get(handle_info))
         .route("/swap", post(handle_swap))
         .with_state(state);
 
