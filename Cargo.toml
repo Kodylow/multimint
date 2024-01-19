@@ -2,5 +2,6 @@
 members = [
     "multimint",
     "multimint-server",
+    "multimint-swap"
 ]
 resolver = "2"

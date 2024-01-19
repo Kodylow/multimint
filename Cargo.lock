@@ -1969,6 +1969,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "multimint-swap"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "axum-macros",
+ "dotenv",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-mint-client",
+ "futures-util",
+ "lazy_static",
+ "multimint",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "nom"
 version = "7.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
