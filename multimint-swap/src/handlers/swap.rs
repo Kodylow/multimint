@@ -31,6 +31,10 @@ pub async fn handle_swap(
     let clients = state.multimint.clients.lock().await;
     let (from_client, to_client) = get_clients(&clients, &req)?;
 
+    if from_client.federation_id() == to_client.federation_id() {
+        return Err(AppError::new(StatusCode::BAD_REQUEST, anyhow!("Cannot swap with yourself")));
+    }
+
     let amount = req.from_ecash.total_amount();
     check_balance(&to_client, amount).await?;
     let notes = perform_swap(to_client, from_client, req.from_ecash, amount).await?;
