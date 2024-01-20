@@ -3,6 +3,7 @@ name = "multimint"
 version = "0.1.0"
 edition = "2021"
 description = "A library for managing multiple Fedimint Clients with default modules: Onchain, Lightning, and Ecash"
+license = "MIT"
 
 [lib]
 path = "src/lib.rs"
