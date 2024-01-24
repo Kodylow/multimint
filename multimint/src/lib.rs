@@ -1,11 +1,14 @@
 use anyhow::Result;
 use fedimint_client::ClientArc;
 use fedimint_core::api::InviteCode;
-use fedimint_core::config::FederationId;
+use fedimint_core::config::{FederationId, JsonClientConfig};
 use fedimint_core::db::Database;
 use fedimint_core::Amount;
+use fedimint_mint_client::MintClientModule;
+use fedimint_wallet_client::WalletClientModule;
 use tokio::sync::Mutex;
 use tracing::warn;
+use types::InfoResponse;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -13,10 +16,10 @@ use std::sync::Arc;
 
 pub mod db;
 pub mod client;
+pub mod types;
 
 use crate::client::LocalClientBuilder;
 use crate::db::FederationConfig;
-
 
 #[derive(Debug, Clone)]
 pub struct MultiMint {
@@ -112,6 +115,10 @@ impl MultiMint {
         self.clients.lock().await.values().cloned().collect()
     }
 
+    pub async fn ids(&self) -> Vec<FederationId> {
+        self.clients.lock().await.keys().cloned().collect()
+    }
+
     pub async fn get(&self, federation_id: &FederationId) -> Option<ClientArc> {
         self.clients.lock().await.get(federation_id).cloned()
     }
@@ -133,6 +140,18 @@ impl MultiMint {
         self.clients.lock().await.contains_key(federation_id)
     }
 
+    pub async fn configs(&self) -> Result<HashMap<FederationId, JsonClientConfig>> {
+        let mut configs_map = HashMap::new();
+        let clients = self.clients.lock().await;
+
+        for (federation_id, client) in clients.iter() {
+            let client_config = client.get_config_json();
+            configs_map.insert(federation_id.clone(), client_config);
+        }
+
+        Ok(configs_map)
+    }
+
     pub async fn ecash_balances(&self) -> Result<HashMap<FederationId, Amount>> {
         let mut balances = HashMap::new();
         let clients = self.clients.lock().await;
@@ -143,5 +162,37 @@ impl MultiMint {
         }
 
         Ok(balances)
+    }
+
+    pub async fn info(&self) -> Result<HashMap<FederationId, InfoResponse>> {
+        let mut info_map = HashMap::new();
+        let clients = self.clients.lock().await;
+
+        for (federation_id, client) in clients.iter() {
+            let mint_client = client.get_first_module::<MintClientModule>();
+            let wallet_client = client.get_first_module::<WalletClientModule>();
+            let summary = mint_client
+                .get_wallet_summary(
+                    &mut self
+                        .db
+                        .begin_transaction_nc()
+                        .await
+                        .to_ref_with_prefix_module_id(1),
+                )
+                .await;
+
+            let info = InfoResponse {
+                federation_id: federation_id.clone(),
+                network: wallet_client.get_network().to_string(),
+                meta: client.get_config().global.meta.clone(),
+                total_amount_msat: summary.total_amount(),
+                total_num_notes: summary.count_items(),
+                denominations_msat: summary,
+            };
+
+            info_map.insert(federation_id.clone(), info);
+        }
+
+        Ok(info_map)
     }
 }
