@@ -3,10 +3,12 @@ use fedimint_client::ClientArc;
 use fedimint_core::api::InviteCode;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::Database;
+use fedimint_core::Amount;
 use tokio::sync::Mutex;
 use tracing::warn;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 
 pub mod db;
@@ -106,7 +108,40 @@ impl MultiMint {
             Ok(())
     }
 
-    pub async fn get_client(&self, federation_id: &FederationId) -> Option<ClientArc> {
+    pub async fn all(&self) -> Vec<ClientArc> {
+        self.clients.lock().await.values().cloned().collect()
+    }
+
+    pub async fn get(&self, federation_id: &FederationId) -> Option<ClientArc> {
         self.clients.lock().await.get(federation_id).cloned()
+    }
+
+    pub async fn get_by_str(&self, federation_id_str: &str) -> Option<ClientArc> {
+        let federation_id = FederationId::from_str(federation_id_str).ok()?;
+        self.get(&federation_id).await
+    }
+
+    pub async fn update(&self, federation_id: &FederationId, new_client: ClientArc) {
+        self.clients.lock().await.insert(federation_id.clone(), new_client);
+    }
+
+    pub async fn remove(&self, federation_id: &FederationId) {
+        self.clients.lock().await.remove(federation_id);
+    }
+
+    pub async fn has(&self, federation_id: &FederationId) -> bool {
+        self.clients.lock().await.contains_key(federation_id)
+    }
+
+    pub async fn ecash_balances(&self) -> Result<HashMap<FederationId, Amount>> {
+        let mut balances = HashMap::new();
+        let clients = self.clients.lock().await;
+
+        for (federation_id, client) in clients.iter() {
+            let balance = client.get_balance().await;
+            balances.insert(federation_id.clone(), balance);
+        }
+
+        Ok(balances)
     }
 }
