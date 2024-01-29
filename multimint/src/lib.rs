@@ -79,7 +79,7 @@ impl MultiMint {
         }
     }
 
-    pub async fn register_new(&mut self, invite_code: InviteCode) -> Result<()> {
+    pub async fn register_new(&mut self, invite_code: InviteCode, default: bool) -> Result<()> {
         if self
                 .clients
                 .lock()
@@ -109,6 +109,8 @@ impl MultiMint {
             self.client_builder
                 .save_config(client_cfg.clone(), dbtx)
                 .await?;
+
+            if default { self.set_default(federation_id); }
 
             Ok(())
     }
