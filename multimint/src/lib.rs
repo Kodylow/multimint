@@ -140,6 +140,15 @@ impl MultiMint {
         self.clients.lock().await.contains_key(federation_id)
     }
 
+    pub async fn has_by_str(&self, federation_id_str: &str) -> bool {
+        let federation_id = match FederationId::from_str(federation_id_str) {
+            Ok(federation_id) => federation_id,
+            Err(_) => return false,
+        };
+
+        self.has(&federation_id).await
+    }
+
     pub async fn configs(&self) -> Result<HashMap<FederationId, JsonClientConfig>> {
         let mut configs_map = HashMap::new();
         let clients = self.clients.lock().await;
