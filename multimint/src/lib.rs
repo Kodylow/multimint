@@ -25,7 +25,8 @@ use crate::db::FederationConfig;
 pub struct MultiMint {
     db: Database,
     pub client_builder: LocalClientBuilder,
-    pub clients: Arc<Mutex<BTreeMap<FederationId, ClientArc>>>
+    pub clients: Arc<Mutex<BTreeMap<FederationId, ClientArc>>>,
+    pub default_id: Option<FederationId>,
 }
 
 impl MultiMint {
@@ -49,6 +50,7 @@ impl MultiMint {
             db: db,
             client_builder: client_builder,
             clients,
+            default_id: None,
         })
     }
 
@@ -109,6 +111,17 @@ impl MultiMint {
                 .await?;
 
             Ok(())
+    }
+
+    pub fn set_default(&mut self, federation_id: FederationId) {
+        self.default_id = Some(federation_id);
+    }
+
+    pub async fn get_default(&self) -> Option<ClientArc> {
+        match &self.default_id {
+            Some(federation_id) => self.get(federation_id).await,
+            None => None,
+        }
     }
 
     pub async fn all(&self) -> Vec<ClientArc> {
