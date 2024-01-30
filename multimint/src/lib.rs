@@ -79,7 +79,8 @@ impl MultiMint {
         }
     }
 
-    pub async fn register_new(&mut self, invite_code: InviteCode, default: bool) -> Result<()> {
+    pub async fn register_new(&mut self, invite_code: InviteCode, default: bool) -> Result<FederationId> {
+        let federation_id = invite_code.federation_id();
         if self
                 .clients
                 .lock()
@@ -88,10 +89,9 @@ impl MultiMint {
                 .is_some()
             {
                 warn!("Federation already registered: {:?}", invite_code.federation_id());
-                return Ok(());
+                return Ok(federation_id);
             }
 
-            let federation_id = invite_code.federation_id();
             let client_cfg = FederationConfig {
                 invite_code,
             };
@@ -112,7 +112,7 @@ impl MultiMint {
 
             if default { self.set_default(federation_id); }
 
-            Ok(())
+            Ok(federation_id)
     }
 
     pub fn set_default(&mut self, federation_id: FederationId) {
