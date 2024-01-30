@@ -1,7 +1,7 @@
 use anyhow::Result;
 use fedimint_client::ClientArc;
 use fedimint_core::api::InviteCode;
-use fedimint_core::config::{FederationId, JsonClientConfig};
+use fedimint_core::config::{FederationId, FederationIdPrefix, JsonClientConfig};
 use fedimint_core::db::Database;
 use fedimint_core::Amount;
 use fedimint_mint_client::MintClientModule;
@@ -141,6 +141,18 @@ impl MultiMint {
     pub async fn get_by_str(&self, federation_id_str: &str) -> Option<ClientArc> {
         let federation_id = FederationId::from_str(federation_id_str).ok()?;
         self.get(&federation_id).await
+    }
+
+    pub async fn get_by_prefix(&self, federation_id_prefix: &FederationIdPrefix) -> Option<ClientArc> {
+        let keys = self.clients.lock().await.keys().cloned().collect::<Vec<_>>();
+        let federation_id = keys
+            .into_iter()
+            .find(|id| id.to_prefix() == federation_id_prefix.clone());
+
+        match federation_id {
+            Some(federation_id) => self.get(&federation_id).await,
+            None => None,
+        }
     }
 
     pub async fn update(&self, federation_id: &FederationId, new_client: ClientArc) {
