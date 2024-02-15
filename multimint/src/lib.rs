@@ -44,13 +44,13 @@ impl MultiMint {
 
         let mut clients = Arc::new(Mutex::new(BTreeMap::new()));
 
-        Self::load_clients(&mut clients, &db, &client_builder).await;
+        let federation_ids = Self::load_clients(&mut clients, &db, &client_builder).await;
 
         Ok(Self {
             db: db,
             client_builder: client_builder,
             clients,
-            default_id: None,
+            default_id: federation_ids.first().cloned(),
         })
     }
 
@@ -58,7 +58,7 @@ impl MultiMint {
         clients: &mut Arc<Mutex<BTreeMap<FederationId, ClientArc>>>,
         db: &Database,
         client_builder: &LocalClientBuilder,
-    ) {
+    ) -> Vec<FederationId> {
         let mut clients = clients.lock().await;
 
         let dbtx = db.begin_transaction().await;
@@ -77,6 +77,8 @@ impl MultiMint {
                 warn!("Failed to load client for federation: {federation_id}");
             }
         }
+
+        clients.keys().cloned().collect()
     }
 
     pub async fn register_new(&mut self, invite_code: InviteCode, default: bool) -> Result<FederationId> {
