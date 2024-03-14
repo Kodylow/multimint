@@ -6,16 +6,16 @@ use fedimint_core::db::Database;
 use fedimint_core::Amount;
 use fedimint_mint_client::MintClientModule;
 use fedimint_wallet_client::WalletClientModule;
-use tokio::sync::Mutex;
-use tracing::warn;
-use types::InfoResponse;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use tokio::sync::Mutex;
+use tracing::warn;
+use types::InfoResponse;
 
-pub mod db;
 pub mod client;
+pub mod db;
 pub mod types;
 
 use crate::client::LocalClientBuilder;
@@ -26,31 +26,25 @@ pub struct MultiMint {
     db: Database,
     pub client_builder: LocalClientBuilder,
     pub clients: Arc<Mutex<BTreeMap<FederationId, ClientArc>>>,
-    pub default_id: Option<FederationId>,
 }
 
 impl MultiMint {
-    pub async fn new(
-        work_dir: PathBuf,
-    ) -> Result<Self> {
+    pub async fn new(work_dir: PathBuf) -> Result<Self> {
         let db = Database::new(
             fedimint_rocksdb::RocksDb::open(work_dir.join("multimint.db"))?,
             Default::default(),
         );
 
-        let client_builder = LocalClientBuilder::new(
-            work_dir,
-        );
+        let client_builder = LocalClientBuilder::new(work_dir);
 
-        let mut clients = Arc::new(Mutex::new(BTreeMap::new()));
+        let clients = Arc::new(Mutex::new(BTreeMap::new()));
 
-        let federation_ids = Self::load_clients(&mut clients, &db, &client_builder).await;
+        Self::load_clients(&mut clients.clone(), &db, &client_builder).await?;
 
         Ok(Self {
             db: db,
             client_builder: client_builder,
             clients,
-            default_id: federation_ids.first().cloned(),
         })
     }
 
@@ -58,7 +52,7 @@ impl MultiMint {
         clients: &mut Arc<Mutex<BTreeMap<FederationId, ClientArc>>>,
         db: &Database,
         client_builder: &LocalClientBuilder,
-    ) -> Vec<FederationId> {
+    ) -> Result<()> {
         let mut clients = clients.lock().await;
 
         let dbtx = db.begin_transaction().await;
@@ -67,65 +61,46 @@ impl MultiMint {
         for config in configs {
             let federation_id = config.invite_code.federation_id();
 
-            if let Ok(client) = client_builder
-                .build(config.clone())
-                .await
-            {
+            if let Ok(client) = client_builder.build(config.clone()).await {
                 clients.insert(federation_id, client);
-                
             } else {
                 warn!("Failed to load client for federation: {federation_id}");
             }
         }
 
-        clients.keys().cloned().collect()
+        Ok(())
     }
 
-    pub async fn register_new(&mut self, invite_code: InviteCode, default: bool) -> Result<FederationId> {
+    pub async fn register_new(&mut self, invite_code: InviteCode) -> Result<FederationId> {
         let federation_id = invite_code.federation_id();
         if self
-                .clients
-                .lock()
-                .await
-                .get(&invite_code.federation_id())
-                .is_some()
-            {
-                warn!("Federation already registered: {:?}", invite_code.federation_id());
-                return Ok(federation_id);
-            }
-
-            let client_cfg = FederationConfig {
-                invite_code,
-            };
-
-            let client = self
-                .client_builder
-                .build(client_cfg.clone())
-                .await?;
-            // self.check_federation_network(&federation_config, gateway_config.network)
-            //     .await?;
-
-            self.clients.lock().await.insert(federation_id, client);
-
-            let dbtx = self.db.begin_transaction().await;
-            self.client_builder
-                .save_config(client_cfg.clone(), dbtx)
-                .await?;
-
-            if default { self.set_default(federation_id); }
-
-            Ok(federation_id)
-    }
-
-    pub fn set_default(&mut self, federation_id: FederationId) {
-        self.default_id = Some(federation_id);
-    }
-
-    pub async fn get_default(&self) -> Option<ClientArc> {
-        match &self.default_id {
-            Some(federation_id) => self.get(federation_id).await,
-            None => None,
+            .clients
+            .lock()
+            .await
+            .get(&invite_code.federation_id())
+            .is_some()
+        {
+            warn!(
+                "Federation already registered: {:?}",
+                invite_code.federation_id()
+            );
+            return Ok(federation_id);
         }
+
+        let client_cfg = FederationConfig { invite_code };
+
+        let client = self.client_builder.build(client_cfg.clone()).await?;
+        // self.check_federation_network(&federation_config, gateway_config.network)
+        //     .await?;
+
+        self.clients.lock().await.insert(federation_id, client);
+
+        let dbtx = self.db.begin_transaction().await;
+        self.client_builder
+            .save_config(client_cfg.clone(), dbtx)
+            .await?;
+
+        Ok(federation_id)
     }
 
     pub async fn all(&self) -> Vec<ClientArc> {
@@ -145,8 +120,17 @@ impl MultiMint {
         self.get(&federation_id).await
     }
 
-    pub async fn get_by_prefix(&self, federation_id_prefix: &FederationIdPrefix) -> Option<ClientArc> {
-        let keys = self.clients.lock().await.keys().cloned().collect::<Vec<_>>();
+    pub async fn get_by_prefix(
+        &self,
+        federation_id_prefix: &FederationIdPrefix,
+    ) -> Option<ClientArc> {
+        let keys = self
+            .clients
+            .lock()
+            .await
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
         let federation_id = keys
             .into_iter()
             .find(|id| id.to_prefix() == federation_id_prefix.clone());
@@ -158,7 +142,10 @@ impl MultiMint {
     }
 
     pub async fn update(&self, federation_id: &FederationId, new_client: ClientArc) {
-        self.clients.lock().await.insert(federation_id.clone(), new_client);
+        self.clients
+            .lock()
+            .await
+            .insert(federation_id.clone(), new_client);
     }
 
     pub async fn remove(&self, federation_id: &FederationId) {

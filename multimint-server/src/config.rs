@@ -24,7 +24,9 @@ impl Config {
         let data_dir = env::var("DATA_DIR").expect("DATA_DIR must be set");
         let data_dir = PathBuf::from_str(&data_dir).expect("Invalid fm db path");
 
-        let invite_code = InviteCode::from_str(&env::var("INVITE_CODE").expect("INVITE_CODE must be set")).expect("Invalid invite code");
+        let invite_code =
+            InviteCode::from_str(&env::var("INVITE_CODE").expect("INVITE_CODE must be set"))
+                .expect("Invalid invite code");
 
         let host = env::var("HOST").expect("HOST must be set");
 
