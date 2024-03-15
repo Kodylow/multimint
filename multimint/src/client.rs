@@ -30,7 +30,7 @@ impl LocalClientBuilder {
 
 impl LocalClientBuilder {
     #[allow(clippy::too_many_arguments)]
-    pub async fn build(&self, config: FederationConfig) -> Result<fedimint_client::ClientArc> {
+    pub async fn build(&self, config: FederationConfig, manual_secret: Option<[u8; 64]>) -> Result<fedimint_client::ClientArc> {
         let federation_id = config.invite_code.federation_id();
 
         let db_path = self.work_dir.join(format!("{federation_id}.db"));
@@ -54,10 +54,16 @@ impl LocalClientBuilder {
         let client_secret = match client_builder.load_decodable_client_secret().await {
             Ok(secret) => secret,
             Err(_) => {
-                info!("Generating secret and writing to client storage");
-                let secret = PlainRootSecretStrategy::random(&mut thread_rng());
-                client_builder.store_encodable_client_secret(secret).await?;
-                secret
+                if let Some(manual_secret) = manual_secret {
+                    info!("Using manual secret provided by user and writing to client storage");
+                    client_builder.store_encodable_client_secret(manual_secret).await?;
+                    manual_secret
+                } else {
+                    info!("Generating new secret and writing to client storage");
+                    let secret = PlainRootSecretStrategy::random(&mut thread_rng());
+                    client_builder.store_encodable_client_secret(secret).await?;
+                    secret
+                }
             }
         };
 

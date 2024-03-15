@@ -18,7 +18,7 @@ pub async fn handle_connect_federation(
     Json(req): Json<ConnectFedPayload>,
 ) -> Result<Json<Value>, AppError> {
     // Register the federation
-    match state.multimint.register_new(req.invite_code).await {
+    match state.multimint.register_new(req.invite_code, None).await {
         Ok(_) => {}
         Err(e) => {
             return Err(AppError::new(StatusCode::CONFLICT, e));

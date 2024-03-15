@@ -61,7 +61,7 @@ impl MultiMint {
         for config in configs {
             let federation_id = config.invite_code.federation_id();
 
-            if let Ok(client) = client_builder.build(config.clone()).await {
+            if let Ok(client) = client_builder.build(config.clone(), None).await {
                 clients.insert(federation_id, client);
             } else {
                 warn!("Failed to load client for federation: {federation_id}");
@@ -71,7 +71,14 @@ impl MultiMint {
         Ok(())
     }
 
-    pub async fn register_new(&mut self, invite_code: InviteCode) -> Result<FederationId> {
+    pub async fn register_new(&mut self, invite_code: InviteCode, manual_secret: Option<String>) -> Result<FederationId> {
+        let manual_secret: Option<[u8; 64]> = match manual_secret {
+            Some(manual_secret) => {
+                let bytes = hex::decode(&manual_secret)?;
+                Some(bytes.try_into().map_err(|_| anyhow::anyhow!("Manual secret must be 64 bytes long"))?)
+            },
+            None => None,
+        };
         let federation_id = invite_code.federation_id();
         if self
             .clients
@@ -89,7 +96,7 @@ impl MultiMint {
 
         let client_cfg = FederationConfig { invite_code };
 
-        let client = self.client_builder.build(client_cfg.clone()).await?;
+        let client = self.client_builder.build(client_cfg.clone(), manual_secret).await?;
         // self.check_federation_network(&federation_config, gateway_config.network)
         //     .await?;
 
