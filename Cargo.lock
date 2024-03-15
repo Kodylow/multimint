@@ -1930,7 +1930,7 @@ dependencies = [
 
 [[package]]
 name = "multimint"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "fedimint",
@@ -1941,6 +1941,7 @@ dependencies = [
  "fedimint-rocksdb",
  "fedimint-wallet-client",
  "futures-util",
+ "hex",
  "rand",
  "serde",
  "serde_json",

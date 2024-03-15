@@ -1,14 +1,12 @@
-use axum::{
-    Router,  routing::post,
-};
+use axum::{routing::post, Router};
 
 // use tower_http::validate_request::ValidateRequestHeaderLayer;
-use tracing::info;
 use anyhow::Result;
+use tracing::info;
 
 pub mod config;
-pub mod handlers;
 pub mod error;
+pub mod handlers;
 
 use config::CONFIG;
 

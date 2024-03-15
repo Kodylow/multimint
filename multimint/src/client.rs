@@ -1,19 +1,19 @@
+use anyhow::Result;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::path::PathBuf;
-use anyhow::Result;
 
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::{Client, FederationInfo, get_config_from_db};
+use fedimint_client::{get_config_from_db, Client, FederationInfo};
 use fedimint_core::db::{
     Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
-use futures_util::StreamExt;
-use rand::thread_rng;
-use tracing::info;
 use fedimint_ln_client::LightningClientInit;
 use fedimint_mint_client::MintClientInit;
 use fedimint_wallet_client::WalletClientInit;
+use futures_util::StreamExt;
+use rand::thread_rng;
+use tracing::info;
 
 use crate::db::{FederationConfig, FederationIdKey, FederationIdKeyPrefix};
 
@@ -23,22 +23,14 @@ pub struct LocalClientBuilder {
 }
 
 impl LocalClientBuilder {
-    pub fn new(
-        work_dir: PathBuf,
-
-    ) -> Self {
-        Self {
-            work_dir,
-        }
+    pub fn new(work_dir: PathBuf) -> Self {
+        Self { work_dir }
     }
 }
 
 impl LocalClientBuilder {
     #[allow(clippy::too_many_arguments)]
-    pub async fn build(
-        &self,
-        config: FederationConfig,
-    ) -> Result<fedimint_client::ClientArc> {
+    pub async fn build(&self, config: FederationConfig, manual_secret: Option<[u8; 64]>) -> Result<fedimint_client::ClientArc> {
         let federation_id = config.invite_code.federation_id();
 
         let db_path = self.work_dir.join(format!("{federation_id}.db"));
@@ -52,25 +44,28 @@ impl LocalClientBuilder {
         // if let client_config = get_config_from_db(&db).await {
         //     let federation_info = FederationInfo::from_invite_code(config.invite_code).await?;
         //     client_builder.with_federation_info(federation_info);
-        // } 
+        // }
         client_builder.with_database(db.clone());
         client_builder.with_module(WalletClientInit(None));
         client_builder.with_module(MintClientInit);
         client_builder.with_module(LightningClientInit);
         client_builder.with_primary_module(1);
 
-        let client_secret =
-            match client_builder.load_decodable_client_secret().await {
-                Ok(secret) => secret,
-                Err(_) => {
-                    info!("Generating secret and writing to client storage");
+        let client_secret = match client_builder.load_decodable_client_secret().await {
+            Ok(secret) => secret,
+            Err(_) => {
+                if let Some(manual_secret) = manual_secret {
+                    info!("Using manual secret provided by user and writing to client storage");
+                    client_builder.store_encodable_client_secret(manual_secret).await?;
+                    manual_secret
+                } else {
+                    info!("Generating new secret and writing to client storage");
                     let secret = PlainRootSecretStrategy::random(&mut thread_rng());
-                    client_builder
-                        .store_encodable_client_secret(secret)
-                        .await?;
+                    client_builder.store_encodable_client_secret(secret).await?;
                     secret
                 }
-            };
+            }
+        };
 
         let root_secret = PlainRootSecretStrategy::to_root_secret(&client_secret);
 

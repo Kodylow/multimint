@@ -1,18 +1,19 @@
 use axum::{
-    Router,  routing::{post, get},
+    routing::{get, post},
+    Router,
 };
 
 // use tower_http::validate_request::ValidateRequestHeaderLayer;
-use tracing::info;
 use anyhow::Result;
+use tracing::info;
 
 pub mod config;
-pub mod handlers;
 pub mod error;
+pub mod handlers;
 
 use config::CONFIG;
 
-use crate::handlers::{swap::handle_swap, info::handle_info};
+use crate::handlers::{info::handle_info, swap::handle_swap};
 
 #[derive(Debug, Clone)]
 pub struct AppState {

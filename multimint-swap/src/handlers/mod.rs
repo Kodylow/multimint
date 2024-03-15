@@ -1,2 +1,2 @@
-pub mod swap;
 pub mod info;
+pub mod swap;
