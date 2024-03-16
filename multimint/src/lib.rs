@@ -38,9 +38,10 @@
 //!    // Create a new client by connecting to a federation with an invite code
 //!    let invite_code = "fed1_invite_code";
 //!    // The client's keypair is created based off a 64 byte random secret that is either generated or provided by the user
-//!    let secret = env::var("FM_SECRET").ok_or
-//!    let client = multimint.register_new(invite_code, None).await?;
+//!    let secret = env::var("FM_SECRET").ok_or(None);
+//!     multimint.register_new(invite_code, secret).await?;
 //!    
+//!    // Get a client by its federation id
 //!    let client = multimint.get(&federation_ids[0]).await?;
 //!    println!("Client: {:?}", client);
 //!    
