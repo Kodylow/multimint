@@ -60,7 +60,7 @@ use fedimint_core::db::Database;
 use fedimint_core::Amount;
 use fedimint_mint_client::MintClientModule;
 use fedimint_wallet_client::WalletClientModule;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -75,6 +75,7 @@ pub mod types;
 use crate::client::LocalClientBuilder;
 use crate::db::FederationConfig;
 
+/// `MultiMint` is a struct for managing Fedimint Clients across multiple federations.
 #[derive(Debug, Clone)]
 pub struct MultiMint {
     db: Database,
@@ -83,6 +84,42 @@ pub struct MultiMint {
 }
 
 impl MultiMint {
+    /// Create a new `MultiMint` instance.
+    /// 
+    /// The `work_dir` parameter is the path to the top level directory for all its data. If the directory does not exist it will be created. If the directory already has data from a previous run, it will be loaded.
+    /// 
+    /// # Example
+    /// 
+    /// ```rust
+    /// use multimint::MultiMint;
+    /// use std::path::PathBuf;
+    /// 
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///   let work_dir = PathBuf::from("/path/to/fm_data_dir");
+    /// 
+    ///   // `new` handles creating a new multimint with no clients or will load the existing databases in the work_dir into ClientArcs
+    ///  let multimint = MultiMint::new(work_dir).await?;
+    /// 
+    ///   // List the ids of the federations the multimint has clients for
+    ///  // E.g. if the work_dir has 2 clients, the ids will be [FederationId, FederationId]
+    /// // If there are no clients, the ids will be an empty vector
+    /// let federation_ids = multimint.ids().await;
+    /// println!("Federation IDs: {:?}", federation_ids);
+    /// 
+    ///   // Create a new client by connecting to a federation with an invite code
+    ///   let invite_code = "fed1_invite_code";
+    ///  // The client's keypair is created based off a 64 byte random secret that is either generated or provided by the user
+    ///  let secret = env::var("FM_SECRET").ok_or(None);
+    ///     multimint.register_new(invite_code, secret).await?;
+    ///    
+    ///   // Get a client by its federation id
+    ///   let client = multimint.get(&federation_ids[0]).await?;
+    ///   println!("Client: {:?}", client);
+    ///    
+    ///   Ok(())
+    /// }
+    /// ```
     pub async fn new(work_dir: PathBuf) -> Result<Self> {
         let db = Database::new(
             fedimint_rocksdb::RocksDb::open(work_dir.join("multimint.db"))?,
@@ -102,6 +139,7 @@ impl MultiMint {
         })
     }
 
+    /// Load the clients from from the top level database in the work directory
     async fn load_clients(
         clients: &mut Arc<Mutex<BTreeMap<FederationId, ClientArc>>>,
         db: &Database,
@@ -125,6 +163,11 @@ impl MultiMint {
         Ok(())
     }
 
+    /// Register a new client by connecting to a federation with an invite code.
+    /// 
+    /// If the client already exists, it will be updated.
+    /// 
+    /// You can provide a manual secret to use for the client's keypair. If you don't provide a secret, a 64 byte random secret will be generated, which you can extract from the client if needed.
     pub async fn register_new(&mut self, invite_code: InviteCode, manual_secret: Option<String>) -> Result<FederationId> {
         let manual_secret: Option<[u8; 64]> = match manual_secret {
             Some(manual_secret) => {
@@ -151,8 +194,6 @@ impl MultiMint {
         let client_cfg = FederationConfig { invite_code };
 
         let client = self.client_builder.build(client_cfg.clone(), manual_secret).await?;
-        // self.check_federation_network(&federation_config, gateway_config.network)
-        //     .await?;
 
         self.clients.lock().await.insert(federation_id, client);
 
@@ -164,23 +205,28 @@ impl MultiMint {
         Ok(federation_id)
     }
 
+    /// Get all the clients in the multimint.
     pub async fn all(&self) -> Vec<ClientArc> {
         self.clients.lock().await.values().cloned().collect()
     }
 
+    /// Get the ids of the federations the multimint has clients for.
     pub async fn ids(&self) -> Vec<FederationId> {
         self.clients.lock().await.keys().cloned().collect()
     }
 
+    /// Get a client by its federation id.
     pub async fn get(&self, federation_id: &FederationId) -> Option<ClientArc> {
         self.clients.lock().await.get(federation_id).cloned()
     }
 
+    /// Get a client by its federation id as a string. (Useful for passing in from the command line or typescript/python/golang sdks)
     pub async fn get_by_str(&self, federation_id_str: &str) -> Option<ClientArc> {
         let federation_id = FederationId::from_str(federation_id_str).ok()?;
         self.get(&federation_id).await
     }
 
+    /// Get a client by its federation id prefix. (Useful for checking if a client exists for given ecash notes)
     pub async fn get_by_prefix(
         &self,
         federation_id_prefix: &FederationIdPrefix,
@@ -202,6 +248,7 @@ impl MultiMint {
         }
     }
 
+    /// Update a client by its federation id.
     pub async fn update(&self, federation_id: &FederationId, new_client: ClientArc) {
         self.clients
             .lock()
@@ -209,14 +256,17 @@ impl MultiMint {
             .insert(federation_id.clone(), new_client);
     }
 
+    /// Remove a client by its federation id.
     pub async fn remove(&self, federation_id: &FederationId) {
         self.clients.lock().await.remove(federation_id);
     }
 
+    /// Check if a client exists by its federation id.
     pub async fn has(&self, federation_id: &FederationId) -> bool {
         self.clients.lock().await.contains_key(federation_id)
     }
 
+    /// Check if a client exists by its federation id as a string.
     pub async fn has_by_str(&self, federation_id_str: &str) -> bool {
         let federation_id = match FederationId::from_str(federation_id_str) {
             Ok(federation_id) => federation_id,
@@ -226,8 +276,9 @@ impl MultiMint {
         self.has(&federation_id).await
     }
 
-    pub async fn configs(&self) -> Result<HashMap<FederationId, JsonClientConfig>> {
-        let mut configs_map = HashMap::new();
+    /// Get the configs for all the clients in the multimint.
+    pub async fn configs(&self) -> Result<BTreeMap<FederationId, JsonClientConfig>> {
+        let mut configs_map = BTreeMap::new();
         let clients = self.clients.lock().await;
 
         for (federation_id, client) in clients.iter() {
@@ -238,8 +289,9 @@ impl MultiMint {
         Ok(configs_map)
     }
 
-    pub async fn ecash_balances(&self) -> Result<HashMap<FederationId, Amount>> {
-        let mut balances = HashMap::new();
+    /// Get the balances for all the clients in the multimint.
+    pub async fn ecash_balances(&self) -> Result<BTreeMap<FederationId, Amount>> {
+        let mut balances = BTreeMap::new();
         let clients = self.clients.lock().await;
 
         for (federation_id, client) in clients.iter() {
@@ -250,8 +302,9 @@ impl MultiMint {
         Ok(balances)
     }
 
-    pub async fn info(&self) -> Result<HashMap<FederationId, InfoResponse>> {
-        let mut info_map = HashMap::new();
+    /// Get the info for all the clients in the multimint.
+    pub async fn info(&self) -> Result<BTreeMap<FederationId, InfoResponse>> {
+        let mut info_map = BTreeMap::new();
         let clients = self.clients.lock().await;
 
         for (federation_id, client) in clients.iter() {

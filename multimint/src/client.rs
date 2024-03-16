@@ -1,3 +1,5 @@
+//! LocalClientBuilder is a builder pattern for adding Fedimint Clients to the multimint
+
 use anyhow::Result;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
@@ -29,6 +31,7 @@ impl LocalClientBuilder {
 }
 
 impl LocalClientBuilder {
+    /// Build a new client with the given config and optional manual secret
     #[allow(clippy::too_many_arguments)]
     pub async fn build(&self, config: FederationConfig, manual_secret: Option<[u8; 64]>) -> Result<fedimint_client::ClientArc> {
         let federation_id = config.invite_code.federation_id();
@@ -41,10 +44,6 @@ impl LocalClientBuilder {
         );
 
         let mut client_builder = Client::builder();
-        // if let client_config = get_config_from_db(&db).await {
-        //     let federation_info = FederationInfo::from_invite_code(config.invite_code).await?;
-        //     client_builder.with_federation_info(federation_info);
-        // }
         client_builder.with_database(db.clone());
         client_builder.with_module(WalletClientInit(None));
         client_builder.with_module(MintClientInit);
@@ -79,6 +78,7 @@ impl LocalClientBuilder {
         Ok(client_res)
     }
 
+    /// Save the federation config to the database
     pub async fn save_config(
         &self,
         config: FederationConfig,
