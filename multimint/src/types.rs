@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use fedimint_core::{config::FederationId, Amount, TieredSummary};
 use serde::Serialize;
 
+/// InfoResponse for getting the Federation Config info
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct InfoResponse {
