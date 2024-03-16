@@ -1,3 +1,56 @@
+//! # Multimint
+//!
+//! `multimint` is a library for managing Fedimint Clients across multiple federations.
+//! 
+//! The main struct is `MultiMint` which holds a map of `ClientArc`s keyed by `FederationId`, and provides methods for managing and interacting with the clients.
+//! 
+//! Multimint uses 1 top level directory for all its data, and creates subdirectories for each client. Each client's directory behaves like a standalone Fedimint client.
+//! 
+//! Example file tree with 2 clients 
+//! ```text
+//! ├── fm_data_dir
+//! │   ├── 15db8cb4f1ec8e484d73b889372bec94812580f929e8148b7437d359af422cd3.db
+//! │   ├── 412d2a9338ebeee5957382eb06eac07fa5235087b5a7d5d0a6e18c635394e9ed.db
+//! │   ├── multimint.db
+//! ```
+//! 
+//! When you create a new `MultiMint` instance you pass it a path to the top level directory for all its data. If the directory does not exist it will be created. If the directory already has data from a previous run, it will be loaded.
+//! 
+//! Example:
+//! 
+//! ```rust
+//! use multimint::MultiMint;
+//! use std::path::PathBuf;
+//! 
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!    let work_dir = PathBuf::from("/path/to/fm_data_dir");
+//! 
+//!    // `new` handles creating a new multimint with no clients or will load the existing databases in the work_dir into ClientArcs
+//!    let multimint = MultiMint::new(work_dir).await?;
+//! 
+//!    // List the ids of the federations the multimint has clients for
+//!    // E.g. if the work_dir has 2 clients, the ids will be [FederationId, FederationId]
+//!    // If there are no clients, the ids will be an empty vector
+//!    let federation_ids = multimint.ids().await;
+//!    println!("Federation IDs: {:?}", federation_ids);
+//! 
+//!    // Create a new client by connecting to a federation with an invite code
+//!    let invite_code = "fed1_invite_code";
+//!    // The client's keypair is created based off a 64 byte random secret that is either generated or provided by the user
+//!    let secret = env::var("FM_SECRET").ok_or
+//!    let client = multimint.register_new(invite_code, None).await?;
+//!    
+//!    let client = multimint.get(&federation_ids[0]).await?;
+//!    println!("Client: {:?}", client);
+//!    
+//!    Ok(())
+//! }
+//! ```
+//! 
+//! The `MultiMint` struct provides methods for adding, removing, and updating clients, as well as getting information about the clients and their balances.
+
+
 use anyhow::Result;
 use fedimint_client::ClientArc;
 use fedimint_core::api::InviteCode;
