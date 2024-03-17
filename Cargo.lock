@@ -635,12 +635,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 
 [[package]]
-name = "fedimint"
-version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d79878f18e518d77cfb3126939d0e63a62cad845d51a3266f4ac866f2efe57f"
-
-[[package]]
 name = "fedimint-aead"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1930,10 +1924,9 @@ dependencies = [
 
 [[package]]
 name = "multimint"
-version = "0.1.9"
+version = "0.1.11"
 dependencies = [
  "anyhow",
- "fedimint",
  "fedimint-client",
  "fedimint-core",
  "fedimint-ln-client",
